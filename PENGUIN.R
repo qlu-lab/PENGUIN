@@ -72,6 +72,11 @@ LDSCoutput <- ldsc(traits = paste0(munged_files, ".sumstats.gz")
 # Extract data from LDSCoutput that will be used in both PENGUIN and PENGUIN-S
 x.var <- LDSCoutput$S[4]
 xy.cov <- LDSCoutput$S[2]
+k <- nrow(LDSCoutput$S)
+se <- matrix(0, k, k)
+se[lower.tri(se, diag = TRUE)] <- sqrt(diag(LDSCoutput$V))
+se.var <- se[4]
+se.cov <- se[2]
 
 ### Calculate phenotypic covariance between the exposure and outcome
 cat("\nCalculating closed form solution for genetic confounding...\n")
@@ -104,15 +109,10 @@ if (type == "individual") {
   cov.beta <- cov.covxy / cov.varx
 
   # calculate standard error
-  k <- nrow(LDSCoutput$S)
-  se <- matrix(0, k, k)
-  se[lower.tri(se, diag = TRUE)] <- sqrt(diag(LDSCoutput$V))
-  se.var <- se[4]
-  se.cov <- se[2]
   mu_x <- cov.covxy
   mu_y <- cov.varx
-  sigma2_x <-  (1 + cov(dat$Y, dat$X)^2) / (nrow(dat) - 1) + se.cov^2
-  sigma2_y <-  2 / (nrow(dat) - 1) + se.var^2
+  sigma2_x <-  (1 + cov(dat$Y, dat$X)^2) / (nrow(dat) - 1) + (se.cov^2)
+  sigma2_y <-  2 / (nrow(dat) - 1) + (se.var^2)
   se.est <- sqrt(sigma2_x / (mu_y^2) + (mu_x^2) * sigma2_y / (mu_y^4))
 
   # calculate marginal regression results as a baseline to output if using individual level data
@@ -137,14 +137,12 @@ if (type == "individual") {
   cov.beta <- cov.covxy / cov.varx
 
   # calculate standard error
-  ldsc.xvar <- strsplit(system(paste0("grep -E '^Intercept:' ", output_path, "/penguin_ldsc.log"),intern = T),split="\\s+")[[2]]
-  ldsc.cov <- strsplit(system(paste0("grep -E '^Cross trait Intercept:' ", output_path, "/penguin_ldsc.log"),intern = T),split="\\s+")[[1]]
-  se.var <- as.numeric(gsub(x = ldsc.xvar[3], pattern = "^\\((.*)\\)", replacement = "\\1"))
-  se.cov <- as.numeric(gsub(x = ldsc.cov[5], pattern = "^\\((.*)\\)", replacement = "\\1"))
+  ldsc.int <- strsplit(system(paste0("grep -E '^Cross trait Intercept:' ", output_path, "/penguin_ldsc.log"),intern = T),split="\\s+")[[1]]
+  ldsc.se.int <- as.numeric(gsub(x = ldsc.int[5], pattern = "^\\((.*)\\)", replacement = "\\1"))
   mu_x <- cov.covxy
   mu_y <- cov.varx
-  sigma2_x <-  (1 + ldsc.xycov^2) / (Ns - 1) + se.cov^2
-  sigma2_y <-  2 / (Ns - 1) + se.var^2
+  sigma2_x <- (LDSCoutput$N[2]^2) / (Ns^2) * (ldsc.se.int^2) + (se.cov^2)
+  sigma2_y <-  2 / (Ns - 1) + (se.var^2)
   se.est <- sqrt(sigma2_x / (mu_y^2) + (mu_x^2) * sigma2_y / (mu_y^4))
 
   # calculate p-value
