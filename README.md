@@ -2,7 +2,7 @@
 `PENGUIN` (PolygENic Genetic confoUnding INference) is a variance component analytical framework to control for genome-wide confounding effects in epidemiologic association studies.
 
 ## Manual
-Please see the [wiki](https://github.com/svdorn/PENGUIN/wiki) for the detailed manual of `PENGUIN`.
+Please see the [wiki](https://github.com/qlu-lab/PENGUIN/wiki) for the detailed manual of `PENGUIN`.
 
 ## Version History
 * December 10, 2023: Initial release.
