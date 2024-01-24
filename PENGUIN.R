@@ -35,8 +35,8 @@ option_list <- list(
   make_option("--covar.name", action = "store", default = NULL, type = "character"),
   make_option("--covar.col", action = "store", default = NULL, type = "character"),
   # required for binary traits
-  make_option("--ss-prev", action = "store", default = NULL, type = "character"),
-  make_option("--ind-prev", action = "store", default = NULL, type = "character"),
+  make_option("--ss.prev", action = "store", default = NULL, type = "character"),
+  make_option("--ind.prev", action = "store", default = NULL, type = "character"),
   # required for PENGUIN-S
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
   # optional - with defaults provided
@@ -117,6 +117,7 @@ LDSCoutput <- ldsc(traits = paste0(munged_files, ".sumstats.gz")
       , population.prev = c(NA, NA)
       , ldsc.log = paste0(output_path, "/penguin")
       , ld = ld, wld = wld)
+save(LDSCoutput, file = paste0(output_path, "/LDSCoutput.RData"))
 # Extract data from LDSCoutput that will be used in both PENGUIN and PENGUIN-S
 x.var <- LDSCoutput$S[4]
 xy.cov <- LDSCoutput$S[2]
@@ -125,6 +126,8 @@ se <- matrix(0, k, k)
 se[lower.tri(se, diag = TRUE)] <- sqrt(diag(LDSCoutput$V))
 se.var <- se[4]
 se.cov <- se[2]
+
+out_df <- data.frame(METHOD = character(), BETA = numeric(), SE = numeric(), P = numeric())
 
 ### Calculate phenotypic covariance between the exposure and outcome
 cat("\nCalculating closed form solution for genetic confounding...\n")
@@ -157,17 +160,19 @@ if (type == "individual") {
   sigma2_x <-  (1 + cov(dat$Y, dat$X)^2) / (nrow(dat) - 1) + (se.cov^2)
   sigma2_y <-  2 / (nrow(dat) - 1) + (se.var^2)
   se.est <- sqrt(sigma2_x / (mu_y^2) + (mu_x^2) * sigma2_y / (mu_y^4))
+  # calculate p-value
+  p.cov <- 2 * pnorm(abs(cov.beta / se.est), lower.tail = FALSE)
+  penguin <- data.frame(METHOD = "PENGUIN", BETA = cov.beta, SE = se.est, P = p.cov)
 
   # calculate marginal regression results as a baseline to output if using individual level data
   lm.marg <- lm(Y ~ X, data = dat)
   se.marg <- summary(lm.marg)$coefficient[2, 2]
   beta.marg <- as.numeric(coefficients(lm.marg)[2])
-  p.marg <- 2 * pnorm(abs(beta.marg / se.marg), lower.tail = FALSE)
+  p.marg <- summary(lm.marg)$coefficient[2, 4]
+  marginal <- data.frame(METHOD = "Marginal Reg", BETA = beta.marg, SE = se.marg, P = p.marg)
 
-  # calculate p-value
-  p.cov <- 2 * pnorm(abs(cov.beta / se.est), lower.tail = FALSE)
   # output data
-  out <- c("BETA" = cov.beta, "SE" = se.est, "P" = p.cov, "BETA_Marginal_Regression" = beta.marg, "SE_Marginal_Regression" = se.marg, "P_Marginal_Regression" = p.marg)
+  out_df <- rbind(out_df, penguin, marginal)
 } else {
   ### PENGUIN-S - Genetic confounding with SUMSTATS DATA
   cat("Using PENGUIN-S - calculating closed form solution with sumstats data.\n")
@@ -191,8 +196,11 @@ if (type == "individual") {
   # calculate p-value
   p.cov <- 2 * pnorm(abs(cov.beta / se.est), lower.tail = FALSE)
   # output data
-  out <- c("BETA" = cov.beta, "SE" = se.est, "P" = p.cov)
+  penguins <- data.frame(METHOD = "PENGUIN-S", BETA = cov.beta, SE = se.est, P = p.cov)
+  out_df <- rbind(out_df, penguins)
 }
 
 cat("\nGenetic confounding sumstats:\n")
-print(out)
+print(out_df)
+cat(paste0("\n\nResults also written to ", output_path, "/results.txt"))
+fwrite(out_df, paste0(output_path, "/results.txt"))
