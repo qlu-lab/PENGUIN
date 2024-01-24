@@ -3,3 +3,4 @@ example/
 extra/
 output_indiv/
 random_individual_data.ipynb
+.DS_Store
