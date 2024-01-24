@@ -23,13 +23,23 @@ if (!require(GenomicSEM)) {
 ### Read the arguments into R
 option_list <- list(
   # required
-  make_option("--sumstat_files", action = "store", default = NULL, type = "character"),
+  make_option("--sumstats", action = "store", default = NULL, type = "character"),
   make_option("--type", action = "store", default = "individual", type = "character"),
-  make_option("--output", action = "store", default = "./", type = "character"),
+  make_option("--out", action = "store", default = "./", type = "character"),
   make_option("--N", action = "store", default = NULL, type = "character"),
+  # required for PENGUIN
+  make_option("--phen", action = "store", default = NULL, type = "character"),
+  make_option("--phen.name", action = "store", default = NULL, type = "character"),
+  make_option("--phen.col", action = "store", default = NULL, type = "character"),
+  make_option("--covar", action = "store", default = NULL, type = "character"),
+  make_option("--covar.name", action = "store", default = NULL, type = "character"),
+  make_option("--covar.col", action = "store", default = NULL, type = "character"),
+  # required for binary traits
+  make_option("--ss-prev", action = "store", default = NULL, type = "character"),
+  make_option("--ind-prev", action = "store", default = NULL, type = "character"),
+  # required for PENGUIN-S
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
-  # optional
-  make_option("--individual_files", action = "store", default = NULL, type = "character"),
+  # optional - with defaults provided
   make_option("--hm3", action = "store", default = "./w_hm3.snplist", type = "character"),
   make_option("--ld", action = "store", default = "./eur_w_ld_chr/", type = "character"),
   make_option("--wld", action = "store", default = "./eur_w_ld_chr/", type = "character")
@@ -38,17 +48,55 @@ option_list <- list(
 ### Read in user inputs
 opt <- parse_args(OptionParser(option_list = option_list))
 # Required inputs
-sumstat_files <- as.character(unlist(strsplit(opt$sumstat_files, split = ",")))
+sumstat_files <- as.character(unlist(strsplit(opt$sumstats, split = ",")))
 type <- opt$type
-output_path <- opt$output
+output_path <- opt$out
 N <- as.numeric(unlist(strsplit(opt$N, split = ",")))
-Ns <- opt$Ns
-# Optional inputs
-if (type == "individual" && is.null(opt$individual_files)) {
-  stop("You didn't provide individual-level data, did you want to use the PENGUIN-S sumstats approach? If so, please pass the flag --type sumstats")
-}
-if (!is.null(opt$individual_files)) {
-  individual_files <- as.character(unlist(strsplit(opt$individual_files, split = ",")))
+# input for PENGUIN - individual approach
+if (type == "individual") {
+  # read phenotype and covariate data and merge together
+  if (is.null(opt$phen)) {
+     stop("You didn't provide individual-level data, did you want to use the PENGUIN-S sumstats approach? If so, please pass the flag --type sumstats.")
+  }
+  # read phenotype data
+  phen <- fread(opt$phen)
+  if (!is.null(opt$phen.name)) {
+    phen_columns <- as.character(unlist(strsplit(opt$phen.name, split = ",")))
+    phen_columns <- match(phen_columns, names(phen))
+  } else if (!is.null(opt$phen.col)) {
+    phen_columns <- as.numeric(unlist(strsplit(opt$phen.col, split = ",")))
+  } else {
+      stop("You didn't provide the argument phen.name or phen.col. PENGUIN cannot decipher the phen file without this information. Please rerun PENGUIN with one of these arguments provided.")
+  }
+  colnames(phen)[phen_columns[1]] <- "Y"
+  colnames(phen)[phen_columns[2]] <- "X"
+  cols <- c("IID", "Y", "X")
+  phen <- phen[, ..cols]
+  # read covariate data
+  if (!is.null(opt$covar)) {
+    covariate <- fread(opt$covar)
+    if (!is.null(opt$covar.name)) {
+      covariate_columns <- as.character(unlist(strsplit(opt$covar.name, split = ",")))
+    } else if (!is.null(opt$covar.col)) {
+      covar.col <- as.numeric(unlist(strsplit(opt$covar.col, split = ",")))
+      covariate_columns <- colnames(covariate)[covar.col]
+    } else {
+      stop("You provided a covariates file, but didn't provide the argument covar.name or covar.col. PENGUIN cannot decipher the covar file without this information. Please rerun PENGUIN with one of these arguments provided.")
+    }
+    cols <- c("IID", covariate_columns)
+    covariate <- covariate[, ..cols]
+    # merge phen and covariate together on IID
+    phen <- base::merge(x = phen, y = covariate, by.x = c("IID"), by.y = c("IID"))
+    phen <- na.omit(phen)
+  } else {
+    cat("\nWarning: you provided no covariates. PENGUIN will be run only with phenotype data.\n")
+  }
+} else {
+  # input for PENGUIN-S - sumstats approach
+  if (is.null(opt$Ns)) {
+    stop("You must provide the argument Ns - the overlapping sample size of the two sumstats in order to run PENGUIN-S.")
+  }
+  Ns <- opt$Ns
 }
 hm3 <- opt$hm3
 ld <- opt$ld
@@ -83,22 +131,17 @@ cat("\nCalculating closed form solution for genetic confounding...\n")
 if (type == "individual") {
   ### PENGUIN - Genetic confounding with INDIVIDUAL-LEVEL DATA
   cat("Using PENGUIN - calculating closed form solution with individual-level data.\n")
-  # read phenotype and covariates data and merge together
-  phen <- fread(individual_files[1])
-  colnames(phen)[3] <- "Y"
-  phen <- subset(phen, select = -FID)
-  covariate <- fread(individual_files[2])
-  colnames(covariate)[3] <- "X"
-  covariate <- subset(covariate, select = -FID)
-  phen <- base::merge(x = phen, y = covariate, by.x = c("IID"), by.y = c("IID"))
-  phen <- na.omit(phen)
-  covariate_columns <- names(phen)[4:length(phen)]
 
   # extract x and y residuals from lm fitted with covariates
-  y.res.formula <- as.formula(paste("Y ~", paste(covariate_columns, collapse = "+")))
-  x.res.formula <- as.formula(paste("X ~", paste(covariate_columns, collapse = "+")))
-  y.res <- resid(lm(y.res.formula, data = phen))
-  x.res <- resid(lm(x.res.formula, data = phen))
+  if (!is.null(opt$covar)) {
+    y.res.formula <- as.formula(paste("Y ~", paste(covariate_columns, collapse = "+")))
+    x.res.formula <- as.formula(paste("X ~", paste(covariate_columns, collapse = "+")))
+    y.res <- resid(lm(y.res.formula, data = phen))
+    x.res <- resid(lm(x.res.formula, data = phen))
+  } else {
+    y.res <- phen$Y
+    x.res <- phen$X
+  }
   y.res <- scale(y.res)
   x.res <- scale(x.res)
   dat <- data.frame(Y = y.res, X = x.res)
@@ -142,7 +185,7 @@ if (type == "individual") {
   mu_x <- cov.covxy
   mu_y <- cov.varx
   sigma2_x <- (LDSCoutput$N[2]^2) / (Ns^2) * (ldsc.se.int^2) + (se.cov^2)
-  sigma2_y <-  2 / (Ns - 1) + (se.var^2)
+  sigma2_y <- 2 / (Ns - 1) + (se.var^2)
   se.est <- sqrt(sigma2_x / (mu_y^2) + (mu_x^2) * sigma2_y / (mu_y^4))
 
   # calculate p-value
