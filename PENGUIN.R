@@ -30,7 +30,7 @@ option_list <- list(
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
   # optional
   make_option("--individual_files", action = "store", default = NULL, type = "character"),
-  make_option("--hm3", action = "store", default = "./w_hm3.noMHC.snplist", type = "character"),
+  make_option("--hm3", action = "store", default = "./w_hm3.snplist", type = "character"),
   make_option("--ld", action = "store", default = "./eur_w_ld_chr/", type = "character"),
   make_option("--wld", action = "store", default = "./eur_w_ld_chr/", type = "character")
 )
@@ -148,7 +148,7 @@ if (type == "individual") {
   # calculate p-value
   p.cov <- 2 * pnorm(abs(cov.beta / se.est), lower.tail = FALSE)
   # output data
-  out <- c("BETA" = format(cov.beta, scientific = F), "SE" = format(se.est, scientific = F), "P" = p.cov)
+  out <- c("BETA" = cov.beta, "SE" = se.est, "P" = p.cov)
 }
 
 cat("\nGenetic confounding sumstats:\n")
