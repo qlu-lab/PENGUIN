@@ -39,8 +39,8 @@ option_list <- list(
   make_option("--ind.prev", action = "store", default = NULL, type = "character"),
   # required for PENGUIN-S
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
+  make_option("--gc", action = "store_true", default = TRUE),
   # optional - with defaults provided
-  make_option("--gc", action = "store_true", default = FALSE),
   make_option("--hm3", action = "store", default = "./w_hm3.snplist", type = "character"),
   make_option("--ld", action = "store", default = "./eur_w_ld_chr/", type = "character"),
   make_option("--wld", action = "store", default = "./eur_w_ld_chr/", type = "character")
@@ -121,8 +121,8 @@ LDSCoutput <- ldsc(traits = paste0(munged_files, ".sumstats.gz")
       , ld = ld, wld = wld)
 save(LDSCoutput, file = paste0(output_path, "/LDSCoutput.RData"))
 # Extract data from LDSCoutput that will be used in both PENGUIN and PENGUIN-S
-x.var <- LDSCoutput$S[4]
-gen.cov <- LDSCoutput$S[2]
+g.var <- LDSCoutput$S[4]
+g.cov <- LDSCoutput$S[2]
 k <- nrow(LDSCoutput$S)
 se <- matrix(0, k, k)
 se[lower.tri(se, diag = TRUE)] <- sqrt(diag(LDSCoutput$V))
@@ -153,12 +153,8 @@ if (type == "individual") {
 
   # calculate beta
   xy.cov <- cov(dat$Y, dat$X)
-  # apply genomic control for the cov(X, Y)
-  if (gc) {
-    xy.cov <- xy.cov / (LDSCoutput$I[1] * LDSCoutput$I[4])
-  }
-  cov.covxy <- xy.cov - gen.cov
-  cov.varx <- var(dat$X) - x.var
+  cov.covxy <- xy.cov - g.cov
+  cov.varx <- var(dat$X) - g.var
   cov.beta <- cov.covxy / cov.varx
 
   # calculate standard error
@@ -190,8 +186,8 @@ if (type == "individual") {
     ldsc.xycov <- ldsc.xycov / (LDSCoutput$I[1] * LDSCoutput$I[4])
   }
   # calculate beta
-  cov.covxy <- ldsc.xycov - gen.cov
-  cov.varx <- 1 - x.var
+  cov.covxy <- ldsc.xycov - g.cov
+  cov.varx <- 1 - g.var
   cov.beta <- cov.covxy / cov.varx
 
   # calculate standard error
