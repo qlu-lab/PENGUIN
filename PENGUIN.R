@@ -35,8 +35,7 @@ option_list <- list(
   make_option("--covar.name", action = "store", default = NULL, type = "character"),
   make_option("--covar.col", action = "store", default = NULL, type = "character"),
   # required for binary traits
-  make_option("--ss.prev", action = "store", default = NULL, type = "character"),
-  make_option("--ind.prev", action = "store", default = NULL, type = "character"),
+  make_option("--sample.prev", action = "store", default = NULL, type = "character"),
   # required for PENGUIN-S
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
   make_option("--gc", action = "store_true", default = TRUE),
@@ -52,7 +51,11 @@ opt <- parse_args(OptionParser(option_list = option_list))
 sumstat_files <- as.character(unlist(strsplit(opt$sumstats, split = ",")))
 type <- opt$type
 output_path <- opt$out
-N <- as.numeric(unlist(strsplit(opt$N, split = ",")))
+if (!is.null(opt$N)) {
+  N <- as.numeric(unlist(strsplit(opt$N, split = ",")))
+} else {
+  N <- c(NA, NA)
+}
 # input for PENGUIN - individual approach
 if (type == "individual") {
   # read phenotype and covariate data and merge together
@@ -112,7 +115,6 @@ munge(files = sumstat_files, N = N,
       hm3 = hm3, trait.names = munged_files,
       log.name = paste0(output_path, "/penguin"),
       parallel = TRUE, cores = 2)
-## sample prev and population prev currently assuming continuous variables
 cat("\nRunning LDSC...\n")
 LDSCoutput <- ldsc(traits = paste0(munged_files, ".sumstats.gz")
       , sample.prev = c(NA, NA)
@@ -136,6 +138,42 @@ cat("\nCalculating closed form solution for genetic confounding...\n")
 if (type == "individual") {
   ### PENGUIN - Genetic confounding with INDIVIDUAL-LEVEL DATA
   cat("Using PENGUIN - calculating closed form solution with individual-level data.\n")
+
+  # if Y or X are binary traits, transform genetic covariance and (if X is binary) heritability
+  if (!is.null(opt$sample.prev)) {
+    # get genetic corr
+    sample.prev <- unlist(strsplit(opt$sample.prev, split = ","))
+    p_Y <- as.numeric(sample.prev[1])
+    p_X <- as.numeric(sample.prev[2])
+    # transform Y's heritability
+    if (!is.na(p_Y)) {
+      # get sample prev from Y's individual-level data
+      p_Y_ind <- sum(phen$Y == 1) / nrow(phen)
+      Y_transform_scale <- (p_Y_ind^2 * (1 - p_Y_ind^2)) / (p_Y^2 * (1 - p_Y^2))
+      cat("\np_Y: ", p_Y)
+      cat("\np_Y_ind: ", p_Y_ind)
+    } else {
+      Y_transform_scale <- 1
+    }
+    # transform X's heritability
+    if (!is.na(p_X)) {
+      # get sample prev from X's individual-level data
+      cat("\nBefore transform g.var: ", g.var)
+      p_X_ind <- sum(phen$X == 1) / nrow(phen)
+      X_transform_scale <- (p_X_ind^2 * (1-p_X_ind^2)) / (p_X^2 * (1 - p_X^2))
+      # transform X's heritability
+      g.var <- g.var * X_transform_scale
+      cat("\nAfter transform g.var: ", g.var)
+    } else {
+      X_transform_scale <- 1
+    }
+    # transform genetic covariance
+    cat("\nBefore transform g.cov: ", g.cov)
+    cat("\nY_transform_scale: ", Y_transform_scale)
+    cat("\nX_transform_scale: ", X_transform_scale)
+    g.cov <- g.cov * sqrt(Y_transform_scale) * sqrt(X_transform_scale)
+    cat("\nAfter transform g.cov: ", g.cov)
+  }
 
   # extract x and y residuals from lm fitted with covariates
   if (!is.null(opt$covar)) {
