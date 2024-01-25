@@ -40,6 +40,7 @@ option_list <- list(
   # required for PENGUIN-S
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
   # optional - with defaults provided
+  make_option("--gc", action = "store_true", default = FALSE),
   make_option("--hm3", action = "store", default = "./w_hm3.snplist", type = "character"),
   make_option("--ld", action = "store", default = "./eur_w_ld_chr/", type = "character"),
   make_option("--wld", action = "store", default = "./eur_w_ld_chr/", type = "character")
@@ -98,6 +99,7 @@ if (type == "individual") {
   }
   Ns <- opt$Ns
 }
+gc <- opt$gc
 hm3 <- opt$hm3
 ld <- opt$ld
 wld <- opt$wld
@@ -178,7 +180,10 @@ if (type == "individual") {
   cat("Using PENGUIN-S - calculating closed form solution with sumstats data.\n")
   # calculate xy covariance from LDSC intercept
   ldsc.xycov <- (LDSCoutput$N[2] / Ns) * LDSCoutput$I[2]
-
+  # adjust xy covariance for genomic control
+  if (gc) {
+    ldsc.xycov <- ldsc.xycov / (LDSCoutput$I[1] * LDSCoutput$I[4])
+  }
   # calculate beta
   cov.covxy <- ldsc.xycov - xy.cov
   cov.varx <- 1 - x.var
@@ -187,9 +192,10 @@ if (type == "individual") {
   # calculate standard error
   ldsc.int <- strsplit(system(paste0("grep -E '^Cross trait Intercept:' ", output_path, "/penguin_ldsc.log"),intern = T),split="\\s+")[[1]]
   ldsc.se.int <- as.numeric(gsub(x = ldsc.int[5], pattern = "^\\((.*)\\)", replacement = "\\1"))
+  ldsc.se.xycov <- ldsc.se.int * LDSCoutput$N[2] / Ns
   mu_x <- cov.covxy
   mu_y <- cov.varx
-  sigma2_x <- (LDSCoutput$N[2]^2) / (Ns^2) * (ldsc.se.int^2) + (se.cov^2)
+  sigma2_x <- (ldsc.se.xycov^2) + (se.cov^2)
   sigma2_y <- 2 / (Ns - 1) + (se.var^2)
   se.est <- sqrt(sigma2_x / (mu_y^2) + (mu_x^2) * sigma2_y / (mu_y^4))
 
@@ -202,5 +208,5 @@ if (type == "individual") {
 
 cat("\nGenetic confounding sumstats:\n")
 print(out_df)
-cat(paste0("\n\nResults also written to ", output_path, "/results.txt"))
+cat(paste0("\n\nResults written to ", output_path, "/results.txt"))
 fwrite(out_df, paste0(output_path, "/results.txt"))
