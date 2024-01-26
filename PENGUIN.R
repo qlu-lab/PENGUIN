@@ -72,6 +72,9 @@ if (type == "individual") {
   } else {
       stop("You didn't provide the argument phen.name or phen.col. PENGUIN cannot decipher the phen file without this information. Please rerun PENGUIN with one of these arguments provided.")
   }
+  if (any(is.na(phen_columns))) {
+    stop("One of the phenotype columns you provided is incorrect. Please check that names or column numbers match the phenotype file.")
+  }
   colnames(phen)[phen_columns[1]] <- "Y"
   colnames(phen)[phen_columns[2]] <- "X"
   cols <- c("IID", "Y", "X")
@@ -143,36 +146,28 @@ if (type == "individual") {
   if (!is.null(opt$sample.prev)) {
     # get genetic corr
     sample.prev <- unlist(strsplit(opt$sample.prev, split = ","))
-    p_Y <- as.numeric(sample.prev[1])
-    p_X <- as.numeric(sample.prev[2])
+    p_Y <- suppressWarnings(as.numeric(sample.prev[1]))
+    p_X <- suppressWarnings(as.numeric(sample.prev[2]))
     # transform Y's heritability
     if (!is.na(p_Y)) {
       # get sample prev from Y's individual-level data
       p_Y_ind <- sum(phen$Y == 1) / nrow(phen)
       Y_transform_scale <- (p_Y_ind^2 * (1 - p_Y_ind^2)) / (p_Y^2 * (1 - p_Y^2))
-      cat("\np_Y: ", p_Y)
-      cat("\np_Y_ind: ", p_Y_ind)
     } else {
       Y_transform_scale <- 1
     }
     # transform X's heritability
     if (!is.na(p_X)) {
       # get sample prev from X's individual-level data
-      cat("\nBefore transform g.var: ", g.var)
       p_X_ind <- sum(phen$X == 1) / nrow(phen)
       X_transform_scale <- (p_X_ind^2 * (1-p_X_ind^2)) / (p_X^2 * (1 - p_X^2))
       # transform X's heritability
       g.var <- g.var * X_transform_scale
-      cat("\nAfter transform g.var: ", g.var)
     } else {
       X_transform_scale <- 1
     }
     # transform genetic covariance
-    cat("\nBefore transform g.cov: ", g.cov)
-    cat("\nY_transform_scale: ", Y_transform_scale)
-    cat("\nX_transform_scale: ", X_transform_scale)
     g.cov <- g.cov * sqrt(Y_transform_scale) * sqrt(X_transform_scale)
-    cat("\nAfter transform g.cov: ", g.cov)
   }
 
   # extract x and y residuals from lm fitted with covariates
@@ -247,5 +242,5 @@ if (type == "individual") {
 
 cat("\nGenetic confounding sumstats:\n")
 print(out_df)
-cat(paste0("\n\nResults written to ", output_path, "/results.txt"))
-fwrite(out_df, paste0(output_path, "/results.txt"))
+cat(paste0("\n\nResults written to ", output_path, "/penguin_results.txt"))
+fwrite(out_df, paste0(output_path, "/penguin_results.txt"))
