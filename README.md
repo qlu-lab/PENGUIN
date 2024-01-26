@@ -5,7 +5,7 @@
 Please see the [wiki](https://github.com/qlu-lab/PENGUIN/wiki) for the detailed manual of `PENGUIN`.
 
 ## Version History
-* December 10, 2023: Initial release.
+* February 18, 2024: Initial release.
 
 ## Citation
 If you use PENGUIN, please cite:   
