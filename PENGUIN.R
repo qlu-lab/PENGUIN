@@ -110,7 +110,7 @@ hm3 <- opt$hm3
 ld <- opt$ld
 wld <- opt$wld
 # Munged files path
-munged_files <- c(paste0(output_path, "/penguin1"), paste0(output_path, "/penguin2"))
+munged_files <- c(paste0(output_path, "/penguin_Y"), paste0(output_path, "/penguin_X"))
 
 ### Run LD score regression for inputed GWAS sumstat files using GenomicSEM
 cat("\nMunging input GWAS sumstats...\n")
