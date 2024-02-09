@@ -38,7 +38,7 @@ option_list <- list(
   make_option("--sample.prev", action = "store", default = NULL, type = "character"),
   # required for PENGUIN-S
   make_option("--Ns", action = "store", default = NULL, type = "integer"),
-  make_option("--gc", action = "store_true", default = TRUE),
+  make_option("--gc", action = "store_true", default = FALSE),
   # optional - with defaults provided
   make_option("--hm3", action = "store", default = "./w_hm3.snplist", type = "character"),
   make_option("--ld", action = "store", default = "./eur_w_ld_chr/", type = "character"),
