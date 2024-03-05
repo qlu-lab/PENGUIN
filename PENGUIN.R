@@ -79,13 +79,27 @@ if (type == "individual") {
   colnames(phen)[phen_columns[2]] <- "X"
   cols <- c("IID", "Y", "X")
   phen <- phen[, ..cols]
-  # read covariate data
+  # read covariate data 
   if (!is.null(opt$covar)) {
     covariate <- fread(opt$covar)
     if (!is.null(opt$covar.name)) {
-      covariate_columns <- as.character(unlist(strsplit(opt$covar.name, split = ",")))
+      if (grepl(":", opt$covar.name)) {
+        name_parts <- unlist(strsplit(opt$covar.name, split = ":"))
+        prefix <- gsub("[0-9]", "", name_parts[1])
+        range_start <- as.numeric(gsub("[^0-9]", "", name_parts[1]))
+        range_end <- as.numeric(name_parts[2])
+        covariate_columns <- paste0(prefix, seq(range_start, range_end))
+      } else {
+        covariate_columns <- as.character(unlist(strsplit(opt$covar.name, split = ",")))
+      }
     } else if (!is.null(opt$covar.col)) {
-      covar.col <- as.numeric(unlist(strsplit(opt$covar.col, split = ",")))
+      if (grepl(":", opt$covar.col)) {
+        covar_range <- as.numeric(unlist(strsplit(opt$covar.col, split = ":")))
+        covar.col <- seq(from = covar_range[1], to = covar_range[2])
+      }
+      else {
+        covar.col <- as.numeric(unlist(strsplit(opt$covar.col, split = ",")))
+      }
       covariate_columns <- colnames(covariate)[covar.col]
     } else {
       stop("You provided a covariates file, but didn't provide the argument covar.name or covar.col. PENGUIN cannot decipher the covar file without this information. Please rerun PENGUIN with one of these arguments provided.")
@@ -241,6 +255,24 @@ if (type == "individual") {
 }
 
 cat("\nGenetic confounding sumstats:\n")
+# keep decimals consistent
+format_decimals <- function(x) {
+  scientific_threshold <- 0.001
+  sapply(x, function(num) {
+    if (abs(num) < scientific_threshold && num != 0) {
+      # use scientific notation
+      format(num, scientific = TRUE, digits = 5)
+    } else {
+      # round decimals
+      round(num, digits = 4)
+    }
+  })
+}
+
+out_df$BETA <- format_decimals(out_df$BETA)
+out_df$SE <- format_decimals(out_df$SE)
+out_df$P <- format_decimals(out_df$P)
+
 print(out_df)
 cat(paste0("\n\nResults written to ", output_path, "/penguin_results.txt"))
-fwrite(out_df, paste0(output_path, "/penguin_results.txt"))
+write.table(out_df, file = paste0(output_path, "/penguin_results.txt"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
