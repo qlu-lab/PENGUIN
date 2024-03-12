@@ -79,13 +79,50 @@ if (type == "individual") {
   colnames(phen)[phen_columns[2]] <- "X"
   cols <- c("IID", "Y", "X")
   phen <- phen[, ..cols]
-  # read covariate data
+  # read covariate data 
   if (!is.null(opt$covar)) {
     covariate <- fread(opt$covar)
     if (!is.null(opt$covar.name)) {
-      covariate_columns <- as.character(unlist(strsplit(opt$covar.name, split = ",")))
+      covariate_columns <- c() # empty vector
+      # split input by commas
+      name_parts <- unlist(strsplit(opt$covar.name, split = ",")) 
+      for (part in name_parts) {
+        if (grepl(":", part)) {
+          # specified range
+          range_parts <- unlist(strsplit(part, split = ":"))
+          range_start <- range_parts[1]
+          range_end <- range_parts[2]
+          # get prefix
+          prefix <- gsub("[0-9]", "", range_start)
+          # get index
+          start_index <- which(colnames(covariate) == range_start)
+          if (!grepl("[[:alpha:]]", range_end)) {
+            # range_end is just a number, need to add prefix
+            range_end <- paste0(prefix, range_end)
+          }
+          end_index <- which(colnames(covariate) == range_end)
+          # append to covariate columns
+          covariate_columns <- c(covariate_columns, colnames(covariate)[start_index:end_index])
+        } else {
+          covariate_columns <- c(covariate_columns, part)
+        }
+      }
     } else if (!is.null(opt$covar.col)) {
-      covar.col <- as.numeric(unlist(strsplit(opt$covar.col, split = ",")))
+      covar.col <- c() # empty vector
+      # split input by commas
+      col_parts <- unlist(strsplit(opt$covar.col, split = ","))
+      for (part in col_parts) {
+        if (grepl(":", part)) {
+          # specified range
+          range_parts <- unlist(strsplit(part, split = ":"))
+          range_start <- as.numeric(range_parts[1])
+          range_end <- as.numeric(range_parts[2])
+          # append to covariate columns
+          covar.col <- c(covar.col, seq(range_start, range_end))
+        } else {
+          covar.col <- c(covar.col, as.numeric(part))
+        }
+      }
       covariate_columns <- colnames(covariate)[covar.col]
     } else {
       stop("You provided a covariates file, but didn't provide the argument covar.name or covar.col. PENGUIN cannot decipher the covar file without this information. Please rerun PENGUIN with one of these arguments provided.")
@@ -241,6 +278,24 @@ if (type == "individual") {
 }
 
 cat("\nGenetic confounding sumstats:\n")
+# keep decimals consistent
+format_decimals <- function(x) {
+  scientific_threshold <- 0.001
+  sapply(x, function(num) {
+    if (abs(num) < scientific_threshold && num != 0) {
+      # use scientific notation
+      format(num, scientific = TRUE, digits = 5)
+    } else {
+      # round decimals
+      round(num, digits = 4)
+    }
+  })
+}
+
+out_df$BETA <- format_decimals(out_df$BETA)
+out_df$SE <- format_decimals(out_df$SE)
+out_df$P <- format_decimals(out_df$P)
+
 print(out_df)
 cat(paste0("\n\nResults written to ", output_path, "/penguin_results.txt"))
-fwrite(out_df, paste0(output_path, "/penguin_results.txt"))
+write.table(out_df, file = paste0(output_path, "/penguin_results.txt"), sep = "\t", row.names = FALSE, col.names = TRUE, quote = FALSE)
